@@ -1,0 +1,31 @@
+name: Release Packaging
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger on version tags like v1.0.0
+
+jobs:
+  build-release:
+    name: Build and Publish Release
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out the repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Create a clean zip archive of the script and documentation
+      - name: Package Release Files
+        run: |
+          mkdir -p dist
+          zip -r dist/dnd-mini-sorter.zip sort_minis.sh README.md LICENSE
+
+      # Step 3: Create a GitHub Release and upload the zip asset
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/dnd-mini-sorter.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
