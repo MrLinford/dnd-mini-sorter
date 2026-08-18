@@ -159,7 +159,7 @@ move_file_to_category() {
     else
         if mv -n "$filepath" "$TARGET_DIR/$dest/" 2>/dev/null; then
             log_info "Moving: $file → $dest/"
-            ((category_counts["$dest"]++))
+            ((category_counts["$dest"]+=1))
         else
             log_warn "Failed to move $file to $dest/"
         fi
@@ -280,7 +280,7 @@ while IFS= read -r -d '' filepath; do
         else
             if mv -n "$filepath" "$TARGET_DIR/Unsorted/" 2>/dev/null; then
                 log_info "Moving: $file → Unsorted/"
-                ((total_unsorted++))
+                ((total_unsorted+=1))
             else
                 log_warn "Failed to move $file to Unsorted/"
             fi
