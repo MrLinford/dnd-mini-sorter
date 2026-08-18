@@ -11,7 +11,11 @@ set -euo pipefail
 # Uses ISO timestamps and explicit level names for easier parsing and readability.
 
 _iso_timestamp() {
-    date -u +"%Y-%m-%dT%H:%M:%S.%3NZ"
+    # Cross-platform ISO 8601 timestamp (handles Linux/macOS differences)
+    local ts
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%S.%N" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%S.000")
+    # Truncate nanoseconds to milliseconds (take first 23 chars + 'Z')
+    printf '%s' "${ts:0:23}Z"
 }
 
 log_info() {
@@ -31,8 +35,33 @@ log_fatal() {
     exit 1
 }
 
-# --- SET YOUR FULL PATHS HERE ---
-SOURCE_DIR="/mnt/user/nas/3D Models/MZ4250 3D Miniature Models Aug 2026"
+print_usage() {
+    cat <<EOF
+Usage: $0 [OPTIONS]
+
+Options:
+  -d, --dry-run    Preview file moves without making changes
+  -h, --help       Show this help message
+
+Environment Variables:
+  SOURCE_DIR       Override the source directory path
+                   (default: /path/to/your/minis)
+
+Examples:
+  # Perform a dry run (recommended first step)
+  $0 --dry-run
+
+  # Sort files using custom source directory
+  SOURCE_DIR="/path/to/minis" $0
+
+  # Dry run with custom directory and capture output to log
+  SOURCE_DIR="/path/to/minis" $0 -d 2>&1 | tee sort_preview.log
+EOF
+}
+
+# --- CONFIGURATION ---
+# Set your default paths here, or override via SOURCE_DIR environment variable
+SOURCE_DIR="${SOURCE_DIR:-/path/to/your/minis}"
 TARGET_DIR="$SOURCE_DIR/Sorted_Monsters"
 
 # --- PARSE COMMAND LINE ARGUMENTS ---
@@ -42,15 +71,33 @@ for arg in "$@"; do
         -d|--dry-run)
             DRY_RUN=true
             ;;
+        -h|--help)
+            print_usage
+            exit 0
+            ;;
         *)
-            log_warn "Unknown argument: $arg"
+            log_error "Unknown argument: $arg"
+            print_usage
+            exit 1
             ;;
     esac
 done
 
-# --- VALIDATE SOURCE DIRECTORY ---
+# --- VALIDATE SOURCE AND TARGET DIRECTORIES ---
 if [[ ! -d "$SOURCE_DIR" ]]; then
     log_fatal "Source directory not found: $SOURCE_DIR"
+fi
+
+if [[ ! -r "$SOURCE_DIR" ]]; then
+    log_fatal "Source directory is not readable: $SOURCE_DIR"
+fi
+
+if [[ "$(cd "$SOURCE_DIR" && pwd)" == "$(cd "$TARGET_DIR" 2>/dev/null && pwd || echo '')" ]]; then
+    log_fatal "Source and target directories cannot be the same"
+fi
+
+if [[ ! "$DRY_RUN" == "true" ]] && [[ ! -w "$SOURCE_DIR" ]]; then
+    log_fatal "Source directory is not writable (required for live mode): $SOURCE_DIR"
 fi
 
 # --- INITIALIZE STATISTICS ---
