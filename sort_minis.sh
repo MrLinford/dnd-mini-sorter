@@ -257,7 +257,6 @@ register_category "Titan" "titan" "kraken" "tarrasque" "empyrean" "god-like" "an
 # This is vastly faster than running find 100+ times
 
 while IFS= read -r -d '' filepath; do
-    local file=""
     file=$(basename "$filepath")
     
     # Skip if already processed
