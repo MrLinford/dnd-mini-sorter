@@ -152,7 +152,8 @@ matches_category() {
 move_file_to_category() {
     local filepath="$1"
     local dest="$2"
-    local file=$(basename "$filepath")
+    local file
+    file=$(basename "$filepath")
     
     if [ "$DRY_RUN" = true ]; then
         log_info "Would move: $file → $dest/"
@@ -256,6 +257,7 @@ register_category "Titan" "titan" "kraken" "tarrasque" "empyrean" "god-like" "an
 # This is vastly faster than running find 100+ times
 
 while IFS= read -r -d '' filepath; do
+    local file=""
     file=$(basename "$filepath")
     
     # Skip if already processed
