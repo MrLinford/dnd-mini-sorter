@@ -1,0 +1,22 @@
+name: ShellCheck
+
+# Trigger this workflow on every push or pull request to the main branch
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    name: Lint Bash Script
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out your repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Run ShellCheck against your script
+      - name: Run ShellCheck
+        run: shellcheck sort_minis.sh
