@@ -39,10 +39,12 @@ Alternatively, edit the default path in the script:
 
 1. Open `sort_minis.sh` in a text editor.
 2. Locate the `CONFIGURATION` section near the top:
+
    ```bash
    # --- CONFIGURATION ---
    SOURCE_DIR="${SOURCE_DIR:-/path/to/your/minis}"
    ```
+
 3. Replace the default path with your actual directory path (keep the `${SOURCE_DIR:-...}` syntax).
 
 ### Finding Your Directory Path
@@ -50,6 +52,7 @@ Alternatively, edit the default path in the script:
 If you're unsure of your directory's full path:
 
 **On Linux/macOS:**
+
 ```bash
 # Navigate to your minis folder in terminal, then run:
 pwd
@@ -57,9 +60,10 @@ pwd
 ```
 
 **Example paths:**
-- `/home/username/3d-models/minis`
-- `/mnt/nas/shared/3D Models/MZ4250 3D Miniature Models Aug 2026`
-- `/Volumes/ExternalDrive/3D Prints/Minis`
+
+* `/home/username/3d-models/minis`
+* `/mnt/nas/shared/3D Models/MZ4250 3D Miniature Models Aug 2026`
+* `/Volumes/ExternalDrive/3D Prints/Minis`
 
 ## 🚀 Usage
 
@@ -141,10 +145,11 @@ sort_category "Plant" "plant" "myconid" "shambling mound" "blight" "treant" "veg
 ```
 
 **Tips for adding keywords:**
-- Keywords are case-insensitive ("Dragon" matches "dragon", "DRAGON", etc.)
-- Use partial words ("dragon" will match "dragon", "red_dragon", "young_dragon")
-- More specific keywords should go first (e.g., "red dragon" before "dragon")
-- Test your additions with a dry run before running live
+
+* Keywords are case-insensitive ("Dragon" matches "dragon", "DRAGON", etc.)
+* Use partial words ("dragon" will match "dragon", "red_dragon", "young_dragon")
+* More specific keywords should go first (e.g., "red dragon" before "dragon")
+* Test your additions with a dry run before running live
 
 ## 📋 Advanced Usage
 
@@ -181,24 +186,28 @@ View all available options:
 
 ## ⚡ Performance
 
-- **Optimized Algorithm:** Single-pass file scanning with in-memory keyword matching
-- **Estimated Times:** 30-60 sec (local disk, 10K files) | 2-5 min (NAS, 10K files)
-- **Backward Compatible:** Identical output, just much faster!
+* **Optimized Algorithm:** Single-pass file scanning with in-memory keyword matching
+* **Estimated Times:** 30-60 sec (local disk, 10K files) | 2-5 min (NAS, 10K files)
+* **Backward Compatible:** Identical output, just much faster!
 
 ## 🔧 Troubleshooting
 
 ### "Source directory not found"
+
 **Cause:** The path doesn't exist or is wrong.
 
 **Solution:**
+
 1. Double-check the path: `ls /path/to/your/minis`
 2. Verify it contains miniature files (`.stl`, `.obj`, `.ctb`, `.lys`, `.zip`)
 3. Use `pwd` in your minis folder to get the exact path
 
 ### "Source directory is not readable"
+
 **Cause:** Permission issues (folder is owned by another user).
 
 **Solution:**
+
 ```bash
 # Check permissions:
 ls -ld /path/to/your/minis
@@ -208,9 +217,11 @@ chmod u+r /path/to/your/minis
 ```
 
 ### "Source directory is not writable" (during live run)
+
 **Cause:** The script can't move files because the directory lacks write permissions.
 
 **Solution:**
+
 ```bash
 # Check if you own the directory:
 ls -ld /path/to/your/minis
@@ -223,26 +234,32 @@ sudo chmod u+w /path/to/your/minis
 ```
 
 ### Files are not being sorted (all end up in "Unsorted")
+
 **Cause:** Filenames don't match any keywords in the dictionary.
 
 **Solution:**
+
 1. Check a filename from the Unsorted folder
 2. Identify the monster type it should be
 3. Add the keyword to the script's dictionary
 4. Run again with the updated script
 
 ### Certain files failed to move
+
 **Cause:** File move errors (usually due to `-n` flag preventing overwrites of existing files).
 
 **Solution:**
-- Check the log for warnings about duplicate filenames
-- Either delete/rename the conflicting file or accept the duplicate in Unsorted
-- The `-n` flag prevents data loss by refusing to overwrite
+
+* Check the log for warnings about duplicate filenames
+* Either delete/rename the conflicting file or accept the duplicate in Unsorted
+* The `-n` flag prevents data loss by refusing to overwrite
 
 ### Script permission error
+
 **Cause:** Script is not executable.
 
 **Solution:**
+
 ```bash
 chmod +x sort_minis.sh
 ```
