@@ -11,7 +11,8 @@ Perfect for Dungeon Masters and 3D printing hobbyists managing massive creator c
 * **Slicer File Support:** Looks beyond just raw `.stl` and `.obj` files to capture pre-supported slicer files and archives (`.ctb`, `.lys`, `.zip`) so your Chitubox or Lychee scenes stay with the raw models.
 * **Optimized Recursive Scanning:** Efficiently digs through nested folders in a single pass, handling complex directory structures without redundant file checks.
 * **Fail-Safe Operations:**
-  * Uses `-n` to prevent overwriting files with identical names.
+  * Compares modification times and overwrites an existing file only when the source is newer.
+  * Preserves older or unchanged duplicates and reports them as skipped.
   * Uses `-prune` to ignore the target directory, preventing infinite loops or double-sorting if run multiple times.
 * **Dry Run Mode:** Preview exactly where files will go without actually moving a single byte.
 * **Detailed Logging:** Outputs ISO-timestamped logs and a final statistical summary of moved files.
@@ -246,13 +247,14 @@ sudo chmod u+w /path/to/your/minis
 
 ### Certain files failed to move
 
-**Cause:** File move errors (usually due to `-n` flag preventing overwrites of existing files).
+**Cause:** File move errors, or a duplicate whose destination is newer or the same age.
 
 **Solution:**
 
 * Check the log for warnings about duplicate filenames
-* Either delete/rename the conflicting file or accept the duplicate in Unsorted
-* The `-n` flag prevents data loss by refusing to overwrite
+* Check the source and destination modification times.
+* A newer source replaces the destination automatically.
+* An older or unchanged source is preserved and reported as skipped.
 
 ### Script permission error
 
@@ -267,7 +269,7 @@ chmod +x sort_minis.sh
 ## ❓ FAQ
 
 **Q: Will this delete any files?**
-A: No. The script only moves files into organized folders. Nothing is deleted. If there's a conflict (duplicate filename), the file is skipped due to the `-n` flag.
+A: No. The script only moves files into organized folders. Nothing is deleted. If a destination already contains the same filename, the source replaces it only when the source is newer; older or unchanged sources are skipped.
 
 **Q: Can I run this multiple times on the same directory?**
 A: Yes! The script safely re-runs without double-sorting. Files already in the Sorted_Monsters folder are excluded from subsequent runs.

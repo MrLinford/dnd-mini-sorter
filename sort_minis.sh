@@ -104,6 +104,7 @@ fi
 declare -i total_moved=0
 declare -i total_unsorted=0
 declare -i total_skipped=0
+declare -i total_overwritten=0
 declare -A category_counts
 
 if [ "$DRY_RUN" = true ]; then
@@ -175,11 +176,29 @@ move_file_to_category() {
     
     if [ "$DRY_RUN" = true ]; then
         ((category_counts["$dest"]+=1))
-        log_info "Would move: $file → $dest/"
+        if [[ -e "$TARGET_DIR/$dest/$file" ]]; then
+            if [[ "$filepath" -nt "$TARGET_DIR/$dest/$file" ]]; then
+                log_info "Would overwrite newer file: $file → $dest/"
+            else
+                log_info "Would skip older or unchanged file: $file in $dest/"
+            fi
+        else
+            log_info "Would move: $file → $dest/"
+        fi
     else
         if [[ -e "$TARGET_DIR/$dest/$file" ]]; then
-            log_warn "Skipped duplicate file: $file already exists in $dest/"
-            ((total_skipped+=1))
+            if [[ "$filepath" -nt "$TARGET_DIR/$dest/$file" ]]; then
+                if mv -f "$filepath" "$TARGET_DIR/$dest/" 2>/dev/null; then
+                    log_info "Overwriting with newer file: $file → $dest/"
+                    ((category_counts["$dest"]+=1))
+                    ((total_overwritten+=1))
+                else
+                    log_warn "Failed to overwrite $file in $dest/"
+                fi
+            else
+                log_warn "Skipped older or unchanged file: $file already exists in $dest/"
+                ((total_skipped+=1))
+            fi
         elif mv -n "$filepath" "$TARGET_DIR/$dest/" 2>/dev/null; then
             log_info "Moving: $file → $dest/"
             ((category_counts["$dest"]+=1))
@@ -310,12 +329,30 @@ while IFS= read -r -d '' filepath; do
     # If no category matched, move to Unsorted
     if ! $found_match; then
         if [ "$DRY_RUN" = true ]; then
-            log_info "Would move: $file → Unsorted/"
+            if [[ -e "$TARGET_DIR/Unsorted/$file" ]]; then
+                if [[ "$filepath" -nt "$TARGET_DIR/Unsorted/$file" ]]; then
+                    log_info "Would overwrite newer file: $file → Unsorted/"
+                else
+                    log_info "Would skip older or unchanged file: $file in Unsorted/"
+                fi
+            else
+                log_info "Would move: $file → Unsorted/"
+            fi
             ((category_counts["Unsorted"]+=1))
         else
             if [[ -e "$TARGET_DIR/Unsorted/$file" ]]; then
-                log_warn "Skipped duplicate file: $file already exists in Unsorted/"
-                ((total_skipped+=1))
+                if [[ "$filepath" -nt "$TARGET_DIR/Unsorted/$file" ]]; then
+                    if mv -f "$filepath" "$TARGET_DIR/Unsorted/" 2>/dev/null; then
+                        log_info "Overwriting with newer file: $file → Unsorted/"
+                        ((total_unsorted+=1))
+                        ((total_overwritten+=1))
+                    else
+                        log_warn "Failed to overwrite $file in Unsorted/"
+                    fi
+                else
+                    log_warn "Skipped older or unchanged file: $file already exists in Unsorted/"
+                    ((total_skipped+=1))
+                fi
             elif mv -n "$filepath" "$TARGET_DIR/Unsorted/" 2>/dev/null; then
                 log_info "Moving: $file → Unsorted/"
                 ((total_unsorted+=1))
@@ -346,6 +383,7 @@ else
     log_info "Total files sorted into categories: $total_moved"
     log_info "Total files in Unsorted: $total_unsorted"
     log_info "Total duplicate files skipped: $total_skipped"
+    log_info "Total newer files overwriting duplicates: $total_overwritten"
     log_info "Grand Total: $((total_moved + total_unsorted + total_skipped)) files"
     log_info "Category Breakdown:"
     for category in "${!category_counts[@]}"; do
