@@ -151,13 +151,20 @@ register_category() {
 quarantine_file() {
     local filepath="$1"
     local file
+    local stem
+    local extension=""
     local quarantine_path
     local suffix=1
     file=$(basename "$filepath")
+    stem="$file"
+    if [[ "$file" == *.* && "$file" != .* ]]; then
+        stem="${file%.*}"
+        extension=".${file##*.}"
+    fi
     quarantine_path="$QUARANTINE_DIR/$file"
 
     while [[ -e "$quarantine_path" ]]; do
-        quarantine_path="$QUARANTINE_DIR/${file}.duplicate.$suffix"
+        quarantine_path="$QUARANTINE_DIR/${stem}.duplicate.$suffix$extension"
         ((suffix+=1))
     done
 
