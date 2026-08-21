@@ -103,6 +103,7 @@ fi
 # --- INITIALIZE STATISTICS ---
 declare -i total_moved=0
 declare -i total_unsorted=0
+declare -i total_skipped=0
 declare -A category_counts
 
 if [ "$DRY_RUN" = true ]; then
@@ -117,7 +118,7 @@ else
     fi
 
     # Generate the directory tree with expanded D&D 5e categories and Reference/Docs folder
-    if ! mkdir -p "$TARGET_DIR"/{Aberration,Beast,Celestial,Construct,Dragon/{Chromatic,Metallic,Gem},Elemental,Fey,Fiend/{Demon,Devil,Yugoloth},Giant/{Hill,Stone,Frost,Fire,Cloud,Storm},Humanoid/{Elf,Dwarf,Halfling,Human,Orc,Aasimar,Dragonborn,Tabaxi,Tortle,Triton,Yuan-ti,Sahuagin,Thri-kreen,Gnome,Lycanthrope},Monstrosity,Ooze,Plant,Undead,Shapechanger,Swarm,Titan,Reference_Docs,Unsorted}; then
+    if ! mkdir -p "$TARGET_DIR"/{Aberration,Beast,Celestial,Construct,Dragon/{Chromatic,Metallic,Gem},Elemental,Fey,Fiend/{Demon,Devil,Yugoloth},Giant/{Hill,Stone,Frost,Fire,Cloud,Storm},Humanoid/{Elf,Dwarf,Halfling,Human,Goblinoid,Orc,Aarakocra,Aasimar,Dragonborn,Kenku,Lizardfolk,Tabaxi,Tortle,Triton,Yuan-ti,Sahuagin,Thri-kreen,Kobold,Gnome,Lycanthrope},Monstrosity,Ooze,Plant,Undead,Shapechanger,Swarm,Titan,Reference_Docs,Unsorted}; then
         log_fatal "Failed to create directory structure at $TARGET_DIR"
     fi
 fi
@@ -134,7 +135,7 @@ declare -a category_order
 register_category() {
     local dest=$1
     shift
-    category_keywords["$dest"]="$*"
+    category_keywords["$dest"]=$(printf '%s\036' "$@")
     category_order+=("$dest")
     category_counts["$dest"]=0
 }
@@ -144,13 +145,25 @@ matches_category() {
     local filename="$1"
     local keywords="$2"
     local filename_lower="${filename,,}"  # Convert to lowercase
+    local -a keyword_list
+    local keyword
+    local keyword_lower
+    local IFS=$'\036'
+    read -r -a keyword_list <<< "$keywords"
+    filename_lower=${filename_lower//[-_]/ }
+    MATCH_LENGTH=0
     
-    for keyword in $keywords; do
-        if [[ "$filename_lower" == *"${keyword,,}"* ]]; then
-            return 0  # Match found
+    for keyword in "${keyword_list[@]}"; do
+        keyword_lower=${keyword,,}
+        keyword_lower=${keyword_lower//[-_]/ }
+        if [[ "$filename_lower" == *"$keyword_lower"* ]]; then
+            if (( ${#keyword} > MATCH_LENGTH )); then
+                MATCH_LENGTH=${#keyword}
+            fi
         fi
     done
-    return 1  # No match
+
+    (( MATCH_LENGTH > 0 ))
 }
 
 # Helper function: move file to category
@@ -161,9 +174,13 @@ move_file_to_category() {
     file=$(basename "$filepath")
     
     if [ "$DRY_RUN" = true ]; then
+        ((category_counts["$dest"]+=1))
         log_info "Would move: $file → $dest/"
     else
-        if mv -n "$filepath" "$TARGET_DIR/$dest/" 2>/dev/null; then
+        if [[ -e "$TARGET_DIR/$dest/$file" ]]; then
+            log_warn "Skipped duplicate file: $file already exists in $dest/"
+            ((total_skipped+=1))
+        elif mv -n "$filepath" "$TARGET_DIR/$dest/" 2>/dev/null; then
             log_info "Moving: $file → $dest/"
             ((category_counts["$dest"]+=1))
         else
@@ -199,13 +216,13 @@ register_category "Construct" "golem" "animated" "stone golem" "iron golem" "cla
 register_category "Dragon/Chromatic" "red dragon" "blue dragon" "green dragon" "black dragon" "white dragon" "chromatic" "tiamat"
 register_category "Dragon/Metallic" "gold dragon" "silver dragon" "bronze dragon" "copper dragon" "brass dragon" "metallic" "bahamut"
 register_category "Dragon/Gem" "amethyst dragon" "crystal dragon" "emerald dragon" "sapphire dragon" "topaz dragon" "gem dragon"
-register_category "Dragon" "wyrmling" "drake" "wyvern" "pseudodragon" "dragon" "dracohydra" "dragon-kin" "kobold" "abishai"
+register_category "Dragon" "wyrmling" "drake" "wyvern" "pseudodragon" "dragon" "dracohydra" "abishai"
 
 # (6) Elementals
-register_category "Elemental" "elemental" "mephit" "azer" "gargoyle" "djinn" "efreeti" "water weird" "water elemental" "fire elemental" "earth elemental" "air elemental" "xorn" "aarakocra" "lizardfolk" "lizard folk" "lizard-man" "merfolk" "leshy"
+register_category "Elemental" "elemental" "mephit" "azer" "gargoyle" "djinn" "efreeti" "water weird" "water elemental" "fire elemental" "earth elemental" "air elemental" "xorn" "merfolk" "leshy"
 
 # (7) Fey
-register_category "Fey" "dryad" "pixie" "sprite" "hag" "satyr" "blink dog" "eladrin" "fey" "sylph" "nymph" "goblin" "hobgoblin" "bugbear" "goblinoid" "eilistraee"
+register_category "Fey" "dryad" "pixie" "sprite" "hag" "satyr" "blink dog" "eladrin" "fey" "sylph" "nymph" "eilistraee"
 
 # (8) Fiends
 register_category "Fiend/Demon" "demon" "balor" "vrock" "quasit" "succubus" "glabrezu" "nalfeshnee" "demonic" "chaotic evil fiend" "bulezau" "nupperibo" "strahd" "bucephalus"
@@ -228,19 +245,24 @@ register_category "Humanoid/Dwarf" "dwarf" "duergar" "mountain dwarf" "hill dwar
 register_category "Humanoid/Halfling" "halfling" "lightfoot" "stout"
 register_category "Humanoid/Human" "human" "bandit" "guard" "cultist" "knight" "mage" "warrior" "fighter" "rogue" "paladin" "ranger" "cleric" "druid" "bard" "wizard" "sorcerer" "warlock" "artificer" "commoner" "noble" "jimothy" "traxigor"
 register_category "Humanoid/Orc" "orc" "half-orc" "half orc" "orcish"
+register_category "Humanoid/Goblinoid" "goblin" "hobgoblin" "bugbear" "goblinoid"
+register_category "Humanoid/Aarakocra" "aarakocra" "aeromancer" "skirmisher" "bird-folk"
 register_category "Humanoid/Aasimar" "aasimar" "aasimar cleric" "aasimar druid" "celestial-touched"
 register_category "Humanoid/Dragonborn" "dragonborn" "half-dragon" "half dragon" "dragon-kin"
+register_category "Humanoid/Kenku" "kenku" "crow-folk" "raven-folk"
+register_category "Humanoid/Lizardfolk" "lizardfolk" "lizard folk" "lizard-man"
 register_category "Humanoid/Tabaxi" "tabaxi" "cat-folk" "feline" "brandysnap"
 register_category "Humanoid/Tortle" "tortle" "turtle-folk"
 register_category "Humanoid/Triton" "triton" "sea-born"
 register_category "Humanoid/Yuan-ti" "yuan-ti" "yuan ti" "serpent-folk" "snake-people"
 register_category "Humanoid/Sahuagin" "sahuagin" "sea-devils" "aquatic-humanoid"
 register_category "Humanoid/Thri-kreen" "thri-kreen" "kreen" "insectoid" "mantis-folk"
+register_category "Humanoid/Kobold" "kobold" "wyrmling-kin" "dragon-spawn"
 register_category "Humanoid/Gnome" "gnome" "tinker" "forest gnome" "rock gnome"
 register_category "Humanoid/Lycanthrope" "wereraven" "werewolf" "werebear" "weretiger" "lycanthrope" "shapeshifter" "hybrid"
 
 # (11) Monstrosities
-register_category "Monstrosity" "mimic" "owlbear" "roper" "chimera" "behir" "minotaur" "centaur" "satyr" "basilisk" "medusa" "doppelganger" "bulette" "umber hulk" "peryton" "griffon" "hippogriff" "monstrosity" "kenku" "crow-folk" "raven-folk" "harpy" "flumph"
+register_category "Monstrosity" "owlbear" "roper" "chimera" "behir" "minotaur" "centaur" "basilisk" "medusa" "bulette" "umber hulk" "peryton" "griffon" "hippogriff" "monstrosity" "harpy" "flumph"
 
 # (12) Oozes
 register_category "Ooze" "ooze" "gelatinous" "pudding" "jelly" "black pudding" "gray ooze" "amoeba"
@@ -267,22 +289,34 @@ while IFS= read -r -d '' filepath; do
         continue
     fi
     
-    # Check against each category in order (stops at first match)
+    # Choose the most specific matching keyword so broad terms do not win first.
     found_match=false
+    best_category=""
+    best_match_length=0
     for category in "${category_order[@]}"; do
         if matches_category "$file" "${category_keywords[$category]}"; then
-            move_file_to_category "$filepath" "$category"
-            found_match=true
-            break
+            if (( MATCH_LENGTH > best_match_length )); then
+                best_category="$category"
+                best_match_length=$MATCH_LENGTH
+            fi
         fi
     done
+
+    if [[ -n "$best_category" ]]; then
+        move_file_to_category "$filepath" "$best_category"
+        found_match=true
+    fi
     
     # If no category matched, move to Unsorted
     if ! $found_match; then
         if [ "$DRY_RUN" = true ]; then
             log_info "Would move: $file → Unsorted/"
+            ((category_counts["Unsorted"]+=1))
         else
-            if mv -n "$filepath" "$TARGET_DIR/Unsorted/" 2>/dev/null; then
+            if [[ -e "$TARGET_DIR/Unsorted/$file" ]]; then
+                log_warn "Skipped duplicate file: $file already exists in Unsorted/"
+                ((total_skipped+=1))
+            elif mv -n "$filepath" "$TARGET_DIR/Unsorted/" 2>/dev/null; then
                 log_info "Moving: $file → Unsorted/"
                 ((total_unsorted+=1))
             else
@@ -311,7 +345,8 @@ else
     log_info "Sorting complete!"
     log_info "Total files sorted into categories: $total_moved"
     log_info "Total files in Unsorted: $total_unsorted"
-    log_info "Grand Total: $((total_moved + total_unsorted)) files"
+    log_info "Total duplicate files skipped: $total_skipped"
+    log_info "Grand Total: $((total_moved + total_unsorted + total_skipped)) files"
     log_info "Category Breakdown:"
     for category in "${!category_counts[@]}"; do
         printf '%s INFO  %-35s %4d files\n' "$( _iso_timestamp )" "$category" "${category_counts[$category]}"
