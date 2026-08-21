@@ -63,6 +63,7 @@ EOF
 # Set your default paths here, or override via SOURCE_DIR environment variable
 SOURCE_DIR="${SOURCE_DIR:-/path/to/your/minis}"
 TARGET_DIR="$SOURCE_DIR/Sorted_Monsters"
+QUARANTINE_DIR="$SOURCE_DIR/Quarantine"
 
 # --- PARSE COMMAND LINE ARGUMENTS ---
 DRY_RUN=false
@@ -105,17 +106,22 @@ declare -i total_moved=0
 declare -i total_unsorted=0
 declare -i total_skipped=0
 declare -i total_overwritten=0
+declare -i total_quarantined=0
 declare -A category_counts
 
 if [ "$DRY_RUN" = true ]; then
     log_info "DRY RUN INITIATED: No files will be moved."
-    log_info "Would create directory structure in: $TARGET_DIR and $SOURCE_DIR/Utility/Size Markers"
+    log_info "Would create directory structure in: $TARGET_DIR, $SOURCE_DIR/Utility/Size Markers, and $QUARANTINE_DIR"
 else
     log_info "LIVE RUN: Moving files..."
     
     # Create the Utility Directory
     if ! mkdir -p "$SOURCE_DIR/Utility/Size Markers"; then
         log_fatal "Failed to create directory structure at $SOURCE_DIR/Utility/Size Markers"
+    fi
+
+    if ! mkdir -p "$QUARANTINE_DIR"; then
+        log_fatal "Failed to create quarantine directory at $QUARANTINE_DIR"
     fi
 
     # Generate the directory tree with expanded D&D 5e categories and Reference/Docs folder
@@ -139,6 +145,30 @@ register_category() {
     category_keywords["$dest"]=$(printf '%s\036' "$@")
     category_order+=("$dest")
     category_counts["$dest"]=0
+}
+
+# Move a duplicate into quarantine using a unique name for review.
+quarantine_file() {
+    local filepath="$1"
+    local file
+    local quarantine_path
+    local suffix=1
+    file=$(basename "$filepath")
+    quarantine_path="$QUARANTINE_DIR/$file"
+
+    while [[ -e "$quarantine_path" ]]; do
+        quarantine_path="$QUARANTINE_DIR/${file}.duplicate.$suffix"
+        ((suffix+=1))
+    done
+
+    if mv "$filepath" "$quarantine_path" 2>/dev/null; then
+        log_info "Quarantined duplicate: $file → ${quarantine_path#"$SOURCE_DIR"/}"
+        ((total_quarantined+=1))
+        return 0
+    fi
+
+    log_warn "Failed to quarantine duplicate: $file"
+    return 1
 }
 
 # Helper function: check if a filename matches any keyword in a category
@@ -178,9 +208,11 @@ move_file_to_category() {
         ((category_counts["$dest"]+=1))
         if [[ -e "$TARGET_DIR/$dest/$file" ]]; then
             if [[ "$filepath" -nt "$TARGET_DIR/$dest/$file" ]]; then
-                log_info "Would overwrite newer file: $file → $dest/"
+                ((total_quarantined+=1))
+                log_info "Would quarantine existing file and overwrite with newer file: $file → $dest/"
             else
-                log_info "Would skip older or unchanged file: $file in $dest/"
+                ((total_quarantined+=1))
+                log_info "Would quarantine older or unchanged file: $file from $dest/"
             fi
         else
             log_info "Would move: $file → $dest/"
@@ -188,7 +220,7 @@ move_file_to_category() {
     else
         if [[ -e "$TARGET_DIR/$dest/$file" ]]; then
             if [[ "$filepath" -nt "$TARGET_DIR/$dest/$file" ]]; then
-                if mv -f "$filepath" "$TARGET_DIR/$dest/" 2>/dev/null; then
+                if quarantine_file "$TARGET_DIR/$dest/$file" && mv -f "$filepath" "$TARGET_DIR/$dest/" 2>/dev/null; then
                     log_info "Overwriting with newer file: $file → $dest/"
                     ((category_counts["$dest"]+=1))
                     ((total_overwritten+=1))
@@ -196,8 +228,9 @@ move_file_to_category() {
                     log_warn "Failed to overwrite $file in $dest/"
                 fi
             else
-                log_warn "Skipped older or unchanged file: $file already exists in $dest/"
-                ((total_skipped+=1))
+                if ! quarantine_file "$filepath"; then
+                    ((total_skipped+=1))
+                fi
             fi
         elif mv -n "$filepath" "$TARGET_DIR/$dest/" 2>/dev/null; then
             log_info "Moving: $file → $dest/"
@@ -331,9 +364,11 @@ while IFS= read -r -d '' filepath; do
         if [ "$DRY_RUN" = true ]; then
             if [[ -e "$TARGET_DIR/Unsorted/$file" ]]; then
                 if [[ "$filepath" -nt "$TARGET_DIR/Unsorted/$file" ]]; then
-                    log_info "Would overwrite newer file: $file → Unsorted/"
+                    ((total_quarantined+=1))
+                    log_info "Would quarantine existing file and overwrite with newer file: $file → Unsorted/"
                 else
-                    log_info "Would skip older or unchanged file: $file in Unsorted/"
+                    ((total_quarantined+=1))
+                    log_info "Would quarantine older or unchanged file: $file from Unsorted/"
                 fi
             else
                 log_info "Would move: $file → Unsorted/"
@@ -342,7 +377,7 @@ while IFS= read -r -d '' filepath; do
         else
             if [[ -e "$TARGET_DIR/Unsorted/$file" ]]; then
                 if [[ "$filepath" -nt "$TARGET_DIR/Unsorted/$file" ]]; then
-                    if mv -f "$filepath" "$TARGET_DIR/Unsorted/" 2>/dev/null; then
+                    if quarantine_file "$TARGET_DIR/Unsorted/$file" && mv -f "$filepath" "$TARGET_DIR/Unsorted/" 2>/dev/null; then
                         log_info "Overwriting with newer file: $file → Unsorted/"
                         ((total_unsorted+=1))
                         ((total_overwritten+=1))
@@ -350,8 +385,9 @@ while IFS= read -r -d '' filepath; do
                         log_warn "Failed to overwrite $file in Unsorted/"
                     fi
                 else
-                    log_warn "Skipped older or unchanged file: $file already exists in Unsorted/"
-                    ((total_skipped+=1))
+                    if ! quarantine_file "$filepath"; then
+                        ((total_skipped+=1))
+                    fi
                 fi
             elif mv -n "$filepath" "$TARGET_DIR/Unsorted/" 2>/dev/null; then
                 log_info "Moving: $file → Unsorted/"
@@ -362,7 +398,7 @@ while IFS= read -r -d '' filepath; do
         fi
         matched_files["$filepath"]=1
     fi
-done < <(find "$SOURCE_DIR" -path "$TARGET_DIR" -prune -o -type f \( -iname "*.stl" -o -iname "*.obj" -o -iname "*.ctb" -o -iname "*.lys" -o -iname "*.zip" -o -iname "*.pdf" -o -iname "*.txt" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.jfif" -o -iname "*.png" \) -print0)
+done < <(find "$SOURCE_DIR" \( -path "$TARGET_DIR" -o -path "$QUARANTINE_DIR" \) -prune -o -type f \( -iname "*.stl" -o -iname "*.obj" -o -iname "*.ctb" -o -iname "*.lys" -o -iname "*.zip" -o -iname "*.pdf" -o -iname "*.txt" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.jfif" -o -iname "*.png" \) -print0)
 
 # --- PRINT SUMMARY ---
 log_info "======================================================================"
@@ -384,7 +420,8 @@ else
     log_info "Total files in Unsorted: $total_unsorted"
     log_info "Total duplicate files skipped: $total_skipped"
     log_info "Total newer files overwriting duplicates: $total_overwritten"
-    log_info "Grand Total: $((total_moved + total_unsorted + total_skipped)) files"
+    log_info "Total duplicate files quarantined: $total_quarantined"
+    log_info "Grand Total: $((total_moved + total_unsorted + total_skipped + total_quarantined)) files"
     log_info "Category Breakdown:"
     for category in "${!category_counts[@]}"; do
         printf '%s INFO  %-35s %4d files\n' "$( _iso_timestamp )" "$category" "${category_counts[$category]}"
