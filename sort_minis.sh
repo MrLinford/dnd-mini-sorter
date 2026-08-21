@@ -107,12 +107,17 @@ declare -A category_counts
 
 if [ "$DRY_RUN" = true ]; then
     log_info "DRY RUN INITIATED: No files will be moved."
-    log_info "Would create directory structure in: $TARGET_DIR"
+    log_info "Would create directory structure in: $TARGET_DIR and $SOURCE_DIR/Utility/Size Markers"
 else
     log_info "LIVE RUN: Moving files..."
-    # Generate the directory tree with D&D 5e Official Creature Type classification
-    # 14 Primary Types + Official Sub-categories (Tags) + Universal Modifiers
-    if ! mkdir -p "$TARGET_DIR"/{Aberration,Beast,Celestial,Construct,Dragon/{Chromatic,Metallic,Gem},Elemental,Fey,Fiend/{Demon,Devil,Yugoloth},Giant/{Hill,Stone,Frost,Fire,Cloud,Storm},Humanoid/{Elf,Dwarf,Halfling,Human,Goblinoid,Orc,Aarakocra,Aasimar,Dragonborn,Kenku,Lizardfolk,Tabaxi,Tortle,Triton,Yuan-ti,Sahuagin,Thri-kreen,Kobold,Gnome,Lycanthrope},Monstrosity,Ooze,Plant,Undead,Shapechanger,Swarm,Titan,Unsorted}; then
+    
+    # Create the Utility Directory
+    if ! mkdir -p "$SOURCE_DIR/Utility/Size Markers"; then
+        log_fatal "Failed to create directory structure at $SOURCE_DIR/Utility/Size Markers"
+    fi
+
+    # Generate the directory tree with expanded D&D 5e categories and Reference/Docs folder
+    if ! mkdir -p "$TARGET_DIR"/{Aberration,Beast,Celestial,Construct,Dragon/{Chromatic,Metallic,Gem},Elemental,Fey,Fiend/{Demon,Devil,Yugoloth},Giant/{Hill,Stone,Frost,Fire,Cloud,Storm},Humanoid/{Elf,Dwarf,Halfling,Human,Orc,Aasimar,Dragonborn,Tabaxi,Tortle,Triton,Yuan-ti,Sahuagin,Thri-kreen,Gnome,Lycanthrope},Monstrosity,Ooze,Plant,Undead,Shapechanger,Swarm,Titan,Reference_Docs,Unsorted}; then
         log_fatal "Failed to create directory structure at $TARGET_DIR"
     fi
 fi
@@ -168,41 +173,45 @@ move_file_to_category() {
     matched_files["$filepath"]=1
 }
 
-# --- D&D 5e OFFICIAL CREATURE TYPE CLASSIFICATION ---
-# Build keyword mappings (will be processed in single-pass loop below)
-# Based on D&D 5th Edition with 14 Primary Types, Official Tags, and Universal Modifiers
-# Reference: Player's Handbook, Monster Manual
+# --- REFINED D&D CLASSIFICATION & UTILITY MAPPINGS ---
+
+# (0) Utility - Expanded keyword variations for size markers
+register_category "../Utility/Size Markers" "huge creature marker" "gargantuan creature marker" "size marker" "creature marker" "floating" "flying marker"
+
+# DOCUMENTATION & REFERENCE FILES
+register_category "Reference_Docs" ".pdf" ".txt" ".jfif" ".jpg" ".jpeg" ".png"
 
 # PRIMARY TYPES (1-14)
 
 # (1) Aberrations
-register_category "Aberration" "beholder" "mind flayer" "illithid" "aboleth" "chuul" "gibbering" "otyugh" "spectator" "yuan-ti" "yuan ti"
+register_category "Aberration" "beholder" "mind flayer" "illithid" "aboleth" "chuul" "gibbering" "otyugh" "spectator" "yuan-ti" "yuan ti" "gith" "amnizu" "nothic"
 
 # (2) Beasts
-register_category "Beast" "bear" "wolf" "panther" "horse" "boar" "lion" "tiger" "leopard" "puma" "eagle" "raven" "crow" "hawk" "owl" "bird" "stirge" "velociraptor" "reptile" "snake" "lizard" "alligator" "crocodile" "turtle" "tortoise" "spider" "rat" "scorpion" "swarm"
+register_category "Beast" "bear" "wolf" "panther" "horse" "boar" "lion" "tiger" "leopard" "puma" "eagle" "raven" "crow" "hawk" "owl" "bird" "stirge" "velociraptor" "reptile" "snake" "lizard" "alligator" "crocodile" "turtle" "tortoise" "spider" "rat" "scorpion" "swarm" "komondor" "doggo"
 
 # (3) Celestials
-register_category "Celestial" "angel" "deva" "planetar" "solar" "pegasus" "unicorn" "empyrean" "couatl" "goodly"
+register_category "Celestial" "angel" "deva" "planetar" "solar" "pegasus" "unicorn" "empyrean" "couatl" "goodly" "lulu"
 
 # (4) Constructs
-register_category "Construct" "golem" "animated" "stone golem" "iron golem" "clay golem" "modron" "monodrone" "duodrone" "tridrone" "quadrone" "pentadrone" "homunculus" "shield guardian" "warforged" "retriever" "nimblewright"
+register_category "Construct" "golem" "animated" "stone golem" "iron golem" "clay golem" "modron" "monodrone" "duodrone" "tridrone" "quadrone" "pentadrone" "homunculus" "shield guardian" "warforged" "retriever" "nimblewright" "apparatus of kwalish"
 
-# (5) Dragons
+# (5) Dragons (Added variations like dracohydra, abishai, drake spell keywords)
 register_category "Dragon/Chromatic" "red dragon" "blue dragon" "green dragon" "black dragon" "white dragon" "chromatic" "tiamat"
 register_category "Dragon/Metallic" "gold dragon" "silver dragon" "bronze dragon" "copper dragon" "brass dragon" "metallic" "bahamut"
 register_category "Dragon/Gem" "amethyst dragon" "crystal dragon" "emerald dragon" "sapphire dragon" "topaz dragon" "gem dragon"
-register_category "Dragon" "wyrmling" "drake" "wyvern" "pseudodragon" "dragon" "dragon-kin"
+register_category "Dragon" "wyrmling" "drake" "wyvern" "pseudodragon" "dragon" "dracohydra" "dragon-kin" "kobold" "abishai"
 
 # (6) Elementals
-register_category "Elemental" "elemental" "mephit" "azer" "gargoyle" "djinn" "efreeti" "water weird" "water elemental" "fire elemental" "earth elemental" "air elemental" "xorn"
+register_category "Elemental" "elemental" "mephit" "azer" "gargoyle" "djinn" "efreeti" "water weird" "water elemental" "fire elemental" "earth elemental" "air elemental" "xorn" "aarakocra" "lizardfolk" "lizard folk" "lizard-man" "merfolk" "leshy"
 
 # (7) Fey
-register_category "Fey" "dryad" "pixie" "sprite" "hag" "satyr" "blink dog" "eladrin" "fey" "sylph" "nymph"
+register_category "Fey" "dryad" "pixie" "sprite" "hag" "satyr" "blink dog" "eladrin" "fey" "sylph" "nymph" "goblin" "hobgoblin" "bugbear" "goblinoid" "eilistraee"
 
 # (8) Fiends
-register_category "Fiend/Demon" "demon" "balor" "vrock" "quasit" "succubus" "glabrezu" "nalfeshnee" "demonic" "chaotic evil fiend"
+register_category "Fiend/Demon" "demon" "balor" "vrock" "quasit" "succubus" "glabrezu" "nalfeshnee" "demonic" "chaotic evil fiend" "bulezau" "nupperibo" "strahd" "bucephalus"
 register_category "Fiend/Devil" "devil" "pit fiend" "imp" "barbed devil" "horned devil" "narzugon" "erinyes" "devilish" "lawful evil fiend"
 register_category "Fiend/Yugoloth" "yugoloth" "ultroloth" "nycaloth" "arcanoloth" "neutral evil fiend"
+register_category "Fiend" "gnoll" "jackalwere"
 
 # (9) Giants
 register_category "Giant/Hill" "hill giant"
@@ -215,28 +224,23 @@ register_category "Giant" "giant" "troll" "ogre" "cyclops" "ettin" "fomorian" "t
 
 # (10) Humanoids
 register_category "Humanoid/Elf" "elf" "drow" "eladrin" "wood elf" "high elf" "dark elf"
-register_category "Humanoid/Dwarf" "dwarf" "duergar" "mountain dwarf" "hill dwarf"
+register_category "Humanoid/Dwarf" "dwarf" "duergar" "mountain dwarf" "hill dwarf" "derro"
 register_category "Humanoid/Halfling" "halfling" "lightfoot" "stout"
-register_category "Humanoid/Human" "human" "bandit" "guard" "cultist" "knight" "mage" "warrior" "fighter" "rogue" "paladin" "ranger" "cleric" "druid" "bard" "wizard" "sorcerer" "warlock" "artificer" "commoner" "noble"
-register_category "Humanoid/Goblinoid" "goblin" "hobgoblin" "bugbear" "goblinoid"
+register_category "Humanoid/Human" "human" "bandit" "guard" "cultist" "knight" "mage" "warrior" "fighter" "rogue" "paladin" "ranger" "cleric" "druid" "bard" "wizard" "sorcerer" "warlock" "artificer" "commoner" "noble" "jimothy" "traxigor"
 register_category "Humanoid/Orc" "orc" "half-orc" "half orc" "orcish"
-register_category "Humanoid/Aarakocra" "aarakocra" "aeromancer" "skirmisher" "bird-folk"
 register_category "Humanoid/Aasimar" "aasimar" "aasimar cleric" "aasimar druid" "celestial-touched"
 register_category "Humanoid/Dragonborn" "dragonborn" "half-dragon" "half dragon" "dragon-kin"
-register_category "Humanoid/Kenku" "kenku" "crow-folk" "raven-folk"
-register_category "Humanoid/Lizardfolk" "lizardfolk" "lizard folk" "lizard-man"
-register_category "Humanoid/Tabaxi" "tabaxi" "cat-folk" "feline"
+register_category "Humanoid/Tabaxi" "tabaxi" "cat-folk" "feline" "brandysnap"
 register_category "Humanoid/Tortle" "tortle" "turtle-folk"
 register_category "Humanoid/Triton" "triton" "sea-born"
 register_category "Humanoid/Yuan-ti" "yuan-ti" "yuan ti" "serpent-folk" "snake-people"
 register_category "Humanoid/Sahuagin" "sahuagin" "sea-devils" "aquatic-humanoid"
 register_category "Humanoid/Thri-kreen" "thri-kreen" "kreen" "insectoid" "mantis-folk"
-register_category "Humanoid/Kobold" "kobold" "wyrmling-kin" "dragon-spawn"
 register_category "Humanoid/Gnome" "gnome" "tinker" "forest gnome" "rock gnome"
 register_category "Humanoid/Lycanthrope" "wereraven" "werewolf" "werebear" "weretiger" "lycanthrope" "shapeshifter" "hybrid"
 
 # (11) Monstrosities
-register_category "Monstrosity" "mimic" "owlbear" "roper" "chimera" "behir" "minotaur" "centaur" "satyr" "basilisk" "medusa" "doppelganger" "bulette" "umber hulk" "nothic" "peryton" "griffon" "hippogriff" "monstrosity" "griffon"
+register_category "Monstrosity" "mimic" "owlbear" "roper" "chimera" "behir" "minotaur" "centaur" "satyr" "basilisk" "medusa" "doppelganger" "bulette" "umber hulk" "peryton" "griffon" "hippogriff" "monstrosity" "kenku" "crow-folk" "raven-folk" "harpy" "flumph"
 
 # (12) Oozes
 register_category "Ooze" "ooze" "gelatinous" "pudding" "jelly" "black pudding" "gray ooze" "amoeba"
@@ -253,8 +257,7 @@ register_category "Swarm" "swarm" "swarm of" "horde" "colony" "flock"
 register_category "Titan" "titan" "kraken" "tarrasque" "empyrean" "god-like" "ancient"
 
 # --- SINGLE-PASS SORTING LOOP ---
-# Find all files ONCE, then check each against all categories
-# This is vastly faster than running find 100+ times
+# Expanded `find` pattern to capture 3D files alongside documentation/images
 
 while IFS= read -r -d '' filepath; do
     file=$(basename "$filepath")
@@ -288,7 +291,7 @@ while IFS= read -r -d '' filepath; do
         fi
         matched_files["$filepath"]=1
     fi
-done < <(find "$SOURCE_DIR" -path "$TARGET_DIR" -prune -o -type f \( -iname "*.stl" -o -iname "*.obj" -o -iname "*.ctb" -o -iname "*.lys" -o -iname "*.zip" \) -print0)
+done < <(find "$SOURCE_DIR" -path "$TARGET_DIR" -prune -o -type f \( -iname "*.stl" -o -iname "*.obj" -o -iname "*.ctb" -o -iname "*.lys" -o -iname "*.zip" -o -iname "*.pdf" -o -iname "*.txt" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.jfif" -o -iname "*.png" \) -print0)
 
 # --- PRINT SUMMARY ---
 log_info "======================================================================"
