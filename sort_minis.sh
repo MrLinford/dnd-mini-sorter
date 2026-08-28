@@ -35,6 +35,10 @@ log_fatal() {
     exit 1
 }
 
+if (( BASH_VERSINFO[0] < 4 )); then
+    log_fatal "Bash 4 or newer is required; found ${BASH_VERSION}"
+fi
+
 print_usage() {
     cat <<EOF
 Usage: $0 [OPTIONS]
@@ -188,13 +192,26 @@ matches_category() {
     local keyword_lower
     local IFS=$'\036'
     read -r -a keyword_list <<< "$keywords"
-    filename_lower=${filename_lower//[-_]/ }
+    filename_lower=${filename_lower//[![:alnum:]]/ }
+    while [[ "$filename_lower" == *"  "* ]]; do
+        filename_lower=${filename_lower//  / }
+    done
+    filename_lower=" $filename_lower "
     MATCH_LENGTH=0
     
     for keyword in "${keyword_list[@]}"; do
         keyword_lower=${keyword,,}
-        keyword_lower=${keyword_lower//[-_]/ }
-        if [[ "$filename_lower" == *"$keyword_lower"* ]]; then
+        keyword_lower=${keyword_lower//[![:alnum:]]/ }
+        while [[ "$keyword_lower" == *"  "* ]]; do
+            keyword_lower=${keyword_lower//  / }
+        done
+        while [[ "$keyword_lower" == " "* ]]; do
+            keyword_lower=${keyword_lower# }
+        done
+        while [[ "$keyword_lower" == *" " ]]; do
+            keyword_lower=${keyword_lower% }
+        done
+        if [[ "$filename_lower" == *" $keyword_lower "* ]]; then
             if (( ${#keyword} > MATCH_LENGTH )); then
                 MATCH_LENGTH=${#keyword}
             fi

@@ -283,7 +283,7 @@ A: Very fast! The script uses an optimized single-pass algorithm that scans all 
 A: Yes, but it may be slower. Consider running a dry run first to estimate time. The script works over SSH/SMB/NFS mounts.
 
 **Q: Will this work on macOS?**
-A: Yes, but the timestamp function includes a fallback for BSD's `date` command. Should work on recent macOS versions.
+A: Yes, with Bash 4 or newer. macOS ships Bash 3.2 by default, so install a newer Bash (for example, `brew install bash`) and invoke it explicitly: `$(brew --prefix)/bin/bash ./sort_minis.sh`. The timestamp function includes a fallback for BSD's `date` command.
 
 ## ⚠️ Disclaimer
 
