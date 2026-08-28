@@ -1,52 +1,57 @@
 # D&D 5e Miniature STL Auto-Sorter 🐉
 
-A robust, fail-safe Bash script designed to automatically organize massive, chaotic directories of 3D printable miniatures into a clean directory structure based on the official Dungeons & Dragons 5th Edition creature taxonomy.
+A Bash import preparer that organizes unstructured 3D printable miniatures for a [Manyfold](https://github.com/manyfold3d/manyfold) library. It assigns Dungeons & Dragons 5th Edition creature taxonomy as Manyfold tag folders while preserving each imported file in its own model directory.
 
 Perfect for Dungeon Masters and 3D printing hobbyists managing massive creator collections (like the MZ4250 Patreon archives) who want to find the right monster for their tabletop session in seconds.
 
 ## ✨ Features
 
-* **Official 5e Taxonomy:** Automatically sorts files into the 14 Primary Creature Types (Aberration, Beast, Celestial, Construct, Dragon, Elemental, Fey, Fiend, Giant, Humanoid, Monstrosity, Ooze, Plant, Undead) plus Universal Modifiers (Shapechanger, Swarm, Titan).
+* **Manyfold Library Layout:** Imports models into `{creator}/{collections}/{tags}/{modelName}-{modelId}` directories, ready for Manyfold to scan.
+* **Official 5e Taxonomy:** Assigns the 14 Primary Creature Types (Aberration, Beast, Celestial, Construct, Dragon, Elemental, Fey, Fiend, Giant, Humanoid, Monstrosity, Ooze, Plant, Undead) plus Universal Modifiers (Shapechanger, Swarm, Titan) as tag folders.
 * **Deep Sub-Categorization:** Drills down into specific sub-races and variants (e.g., separating `Fiend/Demon` from `Fiend/Devil`, or pulling out specific humanoids like `Humanoid/Goblinoid` and `Humanoid/Tabaxi`).
 * **Slicer File Support:** Looks beyond just raw `.stl` and `.obj` files to capture pre-supported slicer files and archives (`.ctb`, `.lys`, `.zip`) so your Chitubox or Lychee scenes stay with the raw models.
 * **Optimized Recursive Scanning:** Efficiently digs through nested folders in a single pass, handling complex directory structures without redundant file checks.
-* **Fail-Safe Operations:**
+* **Import-Safe Operations:**
   * Compares modification times and overwrites an existing file only when the source is newer.
   * Moves duplicate files into `Quarantine/` for review, preserving the replaced version when a newer source is found.
-  * Uses `-prune` to ignore the target directory, preventing infinite loops or double-sorting if run multiple times.
+  * Uses `-prune` to ignore the destination library, preventing imported files from being scanned again.
 * **Dry Run Mode:** Preview exactly where files will go without actually moving a single byte.
 * **Detailed Logging:** Outputs ISO-timestamped logs and a final statistical summary of moved files.
 * **Lightning-Fast Single-Pass Algorithm:** Uses optimized single-pass file scanning (15-30x faster than traditional multi-pass approaches), especially beneficial for large NAS collections.
 
 ## ⚙️ Configuration
 
-Before running the script, you **must** configure it to point to your specific models directory. There are two ways to do this:
+Before running the script, configure the source folder and the values required by your Manyfold library folder template.
 
 ### Option 1: Environment Variable (Recommended)
 
-The easiest way is to pass the `SOURCE_DIR` environment variable when running the script:
+Pass the source directory, destination library root, creator, and collection path as environment variables:
 
 ```bash
-# Dry run with custom directory
-SOURCE_DIR="/path/to/your/minis" ./sort_minis.sh --dry-run
+# Dry run with custom directories
+SOURCE_DIR="/path/to/your/minis" MANYFOLD_LIBRARY_DIR="/path/to/manyfold/library" \
+  MANYFOLD_CREATOR="MZ4250" MANYFOLD_COLLECTIONS="Patreon" ./sort_minis.sh --dry-run
 
-# Live run with custom directory
-SOURCE_DIR="/path/to/your/minis" ./sort_minis.sh
+# Live import
+SOURCE_DIR="/path/to/your/minis" MANYFOLD_LIBRARY_DIR="/path/to/manyfold/library" \
+  MANYFOLD_CREATOR="MZ4250" MANYFOLD_COLLECTIONS="Patreon" ./sort_minis.sh
 ```
 
 ### Option 2: Edit the Script
 
-Alternatively, edit the default path in the script:
+Alternatively, edit the default paths and metadata in the script:
 
-1. Open `sort_minis.sh` in a text editor.
-2. Locate the `CONFIGURATION` section near the top:
+Open `sort_minis.sh` and locate the `CONFIGURATION` section near the top:
 
-   ```bash
-   # --- CONFIGURATION ---
-   SOURCE_DIR="${SOURCE_DIR:-/path/to/your/minis}"
-   ```
+```bash
+# --- CONFIGURATION ---
+SOURCE_DIR="${SOURCE_DIR:-/path/to/your/minis}"
+MANYFOLD_LIBRARY_DIR="${MANYFOLD_LIBRARY_DIR:-$SOURCE_DIR/Manyfold_Library}"
+MANYFOLD_CREATOR="${MANYFOLD_CREATOR:-}"
+MANYFOLD_COLLECTIONS="${MANYFOLD_COLLECTIONS:-}"
+```
 
-3. Replace the default path with your actual directory path (keep the `${SOURCE_DIR:-...}` syntax).
+Set the source, destination library, creator, and collection values. `MANYFOLD_COLLECTIONS` may contain a relative slash-separated path for multiple collection folders.
 
 ### Finding Your Directory Path
 
@@ -100,14 +105,11 @@ SOURCE_DIR="/path/to/minis" ./sort_minis.sh
 
 ### 3. Review Results
 
-After completion, check the `Sorted_Monsters/` folder created in your source directory:
+After completion, add the destination folder as a Manyfold library and scan it. The imported files are already laid out for this configured Manyfold template:
 
 ```bash
-# List the top-level categories created
-ls -la Sorted_Monsters/
-
-# Check what's in the Unsorted folder (files needing manual review)
-ls Sorted_Monsters/Unsorted/
+# Inspect imported models
+find /path/to/manyfold/library -maxdepth 5 -type d
 ```
 
 ## 📁 Output Structure Example
@@ -115,40 +117,35 @@ ls Sorted_Monsters/Unsorted/
 After a successful run, your target directory will look like this:
 
 ```text
-Sorted_Monsters/
-├── Aberration/
-│   ├── Beholder_supported.lys
-│   └── Mind_Flayer_v2.stl
-├── Dragon/
-│   ├── Chromatic/
-│   │   └── Young_Red_Dragon.ctb
-│   └── Metallic/
-│       └── Ancient_Gold_Dragon.stl
-├── Humanoid/
-│   ├── Elf/
-│   ├── Goblinoid/
-│   │   └── Bugbear_Chief.stl
-│   └── Tabaxi/
-├── Undead/
-│   └── Zombie_Horde.zip
-└── Unsorted/
-    └── [Files that did not match any 5e keyword]
+MZ4250/
+└── Patreon/
+  ├── Dragon/
+  │   └── Chromatic/
+  │       └── Young_Red_Dragon-42/
+  │           └── Young_Red_Dragon.ctb
+  ├── Humanoid/
+  │   └── Goblinoid/
+  │       └── Bugbear_Chief-43/
+  │           └── Bugbear_Chief.stl
+  └── Unsorted/
+    └── Unknown_Model-44/
+      └── Unknown_Model.stl
 ```
 
-*Any files that do not match the built-in keyword dictionary will be safely swept into the `Unsorted/` folder for manual review.*
+Each import gets a numeric `modelId` greater than every existing `*-<number>` model directory in the destination library. Files without a dictionary match are imported under the `Unsorted` tag for review.
 
 ## 🛠️ Modifying the Dictionary
 
 You can easily add new monsters, specific character names, or custom tags to the sorting logic. Open the script and locate the `--- D&D 5e OFFICIAL CREATURE TYPE CLASSIFICATION ---` section. Simply append your new keywords (in lowercase) to the end of the relevant category line:
 
 ```bash
-sort_category "Plant" "plant" "myconid" "shambling mound" "blight" "treant" "vegepygmy" "YOUR_NEW_KEYWORD"
+register_category "Plant" "plant" "myconid" "shambling mound" "blight" "treant" "vegepygmy" "YOUR_NEW_KEYWORD"
 ```
 
 **Tips for adding keywords:**
 
 * Keywords are case-insensitive ("Dragon" matches "dragon", "DRAGON", etc.)
-* Use partial words ("dragon" will match "dragon", "red_dragon", "young_dragon")
+* Keywords match complete filename terms, so "dragon" matches "dragon", "red_dragon", and "young_dragon" without matching unrelated text
 * More specific keywords should go first (e.g., "red dragon" before "dragon")
 * Test your additions with a dry run before running live
 
@@ -271,7 +268,7 @@ chmod +x sort_minis.sh
 A: No. The script only moves files into organized folders. Nothing is deleted. Duplicate files are moved to `Quarantine/` for review, and a source replaces an existing destination only when the source is newer.
 
 **Q: Can I run this multiple times on the same directory?**
-A: Yes! The script safely re-runs without double-sorting. Files already in the Sorted_Monsters folder are excluded from subsequent runs.
+A: Yes. The destination library is excluded from scanning, and a later import continues allocating model IDs above the highest existing numeric model-directory suffix.
 
 **Q: What if my source and target directories have different paths but are actually the same?**
 A: The script detects this and prevents infinite loops. You're safe.

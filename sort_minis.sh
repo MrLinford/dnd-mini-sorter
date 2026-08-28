@@ -48,25 +48,33 @@ Options:
   -h, --help       Show this help message
 
 Environment Variables:
-  SOURCE_DIR       Override the source directory path
+    SOURCE_DIR             Directory containing files to import
                    (default: /path/to/your/minis)
+    MANYFOLD_LIBRARY_DIR   Destination Manyfold library root
+                                     (default: SOURCE_DIR/Manyfold_Library)
+    MANYFOLD_CREATOR       Creator folder required by the Manyfold template
+    MANYFOLD_COLLECTIONS   Collection folder path required by the Manyfold template
 
 Examples:
   # Perform a dry run (recommended first step)
   $0 --dry-run
 
-  # Sort files using custom source directory
-  SOURCE_DIR="/path/to/minis" $0
+    # Import files into a Manyfold library
+    SOURCE_DIR="/path/to/minis" MANYFOLD_LIBRARY_DIR="/path/to/manyfold/library" \
+        MANYFOLD_CREATOR="MZ4250" MANYFOLD_COLLECTIONS="Patreon" $0
 
   # Dry run with custom directory and capture output to log
-  SOURCE_DIR="/path/to/minis" $0 -d 2>&1 | tee sort_preview.log
+    SOURCE_DIR="/path/to/minis" MANYFOLD_CREATOR="MZ4250" MANYFOLD_COLLECTIONS="Patreon" \
+        $0 -d 2>&1 | tee sort_preview.log
 EOF
 }
 
 # --- CONFIGURATION ---
-# Set your default paths here, or override via SOURCE_DIR environment variable
+# Set your default paths here, or override via environment variables.
 SOURCE_DIR="${SOURCE_DIR:-/path/to/your/minis}"
-TARGET_DIR="$SOURCE_DIR/Sorted_Monsters"
+MANYFOLD_LIBRARY_DIR="${MANYFOLD_LIBRARY_DIR:-$SOURCE_DIR/Manyfold_Library}"
+MANYFOLD_CREATOR="${MANYFOLD_CREATOR:-}"
+MANYFOLD_COLLECTIONS="${MANYFOLD_COLLECTIONS:-}"
 QUARANTINE_DIR="$SOURCE_DIR/Quarantine"
 
 # --- PARSE COMMAND LINE ARGUMENTS ---
@@ -97,8 +105,20 @@ if [[ ! -r "$SOURCE_DIR" ]]; then
     log_fatal "Source directory is not readable: $SOURCE_DIR"
 fi
 
-if [[ "$(cd "$SOURCE_DIR" && pwd)" == "$(cd "$TARGET_DIR" 2>/dev/null && pwd || echo '')" ]]; then
-    log_fatal "Source and target directories cannot be the same"
+if [[ -z "$MANYFOLD_CREATOR" || -z "$MANYFOLD_COLLECTIONS" ]]; then
+    log_fatal "MANYFOLD_CREATOR and MANYFOLD_COLLECTIONS must be set"
+fi
+
+if [[ "$MANYFOLD_CREATOR" == /* || "$MANYFOLD_CREATOR" == *"/../"* || "$MANYFOLD_CREATOR" == ".." || "$MANYFOLD_CREATOR" == ../* || "$MANYFOLD_CREATOR" == */.. ]]; then
+    log_fatal "MANYFOLD_CREATOR must be a relative directory name without '..'"
+fi
+
+if [[ "$MANYFOLD_COLLECTIONS" == /* || "$MANYFOLD_COLLECTIONS" == *"/../"* || "$MANYFOLD_COLLECTIONS" == ".." || "$MANYFOLD_COLLECTIONS" == ../* || "$MANYFOLD_COLLECTIONS" == */.. ]]; then
+    log_fatal "MANYFOLD_COLLECTIONS must be a relative directory path without '..'"
+fi
+
+if [[ "$(cd "$SOURCE_DIR" && pwd)" == "$(cd "$MANYFOLD_LIBRARY_DIR" 2>/dev/null && pwd || echo '')" ]]; then
+    log_fatal "Source and Manyfold library directories cannot be the same"
 fi
 
 if [[ ! "$DRY_RUN" == "true" ]] && [[ ! -w "$SOURCE_DIR" ]]; then
@@ -107,35 +127,52 @@ fi
 
 # --- INITIALIZE STATISTICS ---
 declare -i total_moved=0
-declare -i total_unsorted=0
 declare -i total_skipped=0
 declare -i total_overwritten=0
 declare -i total_quarantined=0
+declare -i next_model_id=1
 declare -A category_counts
+declare -A model_directories
+
+initialize_model_id() {
+    local directory
+    local directory_name
+    local existing_id
+    local max_model_id=0
+
+    [[ -d "$MANYFOLD_LIBRARY_DIR" ]] || return 0
+
+    while IFS= read -r -d '' directory; do
+        directory_name=$(basename "$directory")
+        if [[ "$directory_name" =~ -([0-9]+)$ ]]; then
+            existing_id="${BASH_REMATCH[1]}"
+            if (( 10#$existing_id > max_model_id )); then
+                max_model_id=$((10#$existing_id))
+            fi
+        fi
+    done < <(find "$MANYFOLD_LIBRARY_DIR" -type d -print0)
+
+    next_model_id=$((max_model_id + 1))
+}
 
 if [ "$DRY_RUN" = true ]; then
     log_info "DRY RUN INITIATED: No files will be moved."
-    log_info "Would create directory structure in: $TARGET_DIR, $SOURCE_DIR/Utility/Size Markers, and $QUARANTINE_DIR"
+    log_info "Would create Manyfold library structure in: $MANYFOLD_LIBRARY_DIR"
 else
     log_info "LIVE RUN: Moving files..."
-    
-    # Create the Utility Directory
-    if ! mkdir -p "$SOURCE_DIR/Utility/Size Markers"; then
-        log_fatal "Failed to create directory structure at $SOURCE_DIR/Utility/Size Markers"
-    fi
 
     if ! mkdir -p "$QUARANTINE_DIR"; then
         log_fatal "Failed to create quarantine directory at $QUARANTINE_DIR"
     fi
 
-    # Generate the directory tree with expanded D&D 5e categories and Reference/Docs folder
-    if ! mkdir -p "$TARGET_DIR"/{Aberration,Beast,Celestial,Construct,Dragon/{Chromatic,Metallic,Gem},Elemental,Fey,Fiend/{Demon,Devil,Yugoloth},Giant/{Hill,Stone,Frost,Fire,Cloud,Storm},Humanoid/{Elf,Dwarf,Halfling,Human,Goblinoid,Orc,Aarakocra,Aasimar,Dragonborn,Kenku,Lizardfolk,Tabaxi,Tortle,Triton,Yuan-ti,Sahuagin,Thri-kreen,Kobold,Gnome,Lycanthrope},Monstrosity,Ooze,Plant,Undead,Shapechanger,Swarm,Titan,Reference_Docs,Unsorted}; then
-        log_fatal "Failed to create directory structure at $TARGET_DIR"
+    if ! mkdir -p "$MANYFOLD_LIBRARY_DIR"; then
+        log_fatal "Failed to create Manyfold library directory at $MANYFOLD_LIBRARY_DIR"
     fi
 fi
 
 log_info "Scanning directory: $SOURCE_DIR"
 log_info "======================================================================"
+initialize_model_id
 
 # Create an associative array to track which files have been processed
 declare -A matched_files
@@ -221,46 +258,72 @@ matches_category() {
     (( MATCH_LENGTH > 0 ))
 }
 
-# Helper function: move file to category
+# Return the Manyfold model directory for a source file and its D&D tag path.
+model_directory_for_file() {
+    local filepath="$1"
+    local dest="$2"
+    local file
+    local model_name
+    local model_key
+    file=$(basename "$filepath")
+    model_name="${file%.*}"
+    model_name=${model_name//[![:alnum:]._-]/_}
+    [[ -n "$model_name" ]] || model_name="model"
+    model_key="$(dirname "$filepath")/$dest/$model_name"
+
+    if [[ ! -v model_directories["$model_key"] ]]; then
+        model_directories["$model_key"]="$MANYFOLD_LIBRARY_DIR/$MANYFOLD_CREATOR/$MANYFOLD_COLLECTIONS/$dest/$model_name-$next_model_id"
+        ((next_model_id+=1))
+    fi
+
+    MODEL_DIRECTORY="${model_directories["$model_key"]}"
+}
+
+# Helper function: move a file into its Manyfold model directory.
 move_file_to_category() {
     local filepath="$1"
     local dest="$2"
     local file
+    local model_directory
     file=$(basename "$filepath")
+    model_directory_for_file "$filepath" "$dest"
+    model_directory="$MODEL_DIRECTORY"
     
     if [ "$DRY_RUN" = true ]; then
         ((category_counts["$dest"]+=1))
-        if [[ -e "$TARGET_DIR/$dest/$file" ]]; then
-            if [[ "$filepath" -nt "$TARGET_DIR/$dest/$file" ]]; then
+        if [[ -e "$model_directory/$file" ]]; then
+            if [[ "$filepath" -nt "$model_directory/$file" ]]; then
                 ((total_quarantined+=1))
-                log_info "Would quarantine existing file and overwrite with newer file: $file → $dest/"
+                log_info "Would quarantine existing file and overwrite with newer file: $file → ${model_directory#"$MANYFOLD_LIBRARY_DIR"/}/"
             else
                 ((total_quarantined+=1))
-                log_info "Would quarantine older or unchanged file: $file from $dest/"
+                log_info "Would quarantine older or unchanged file: $file from ${model_directory#"$MANYFOLD_LIBRARY_DIR"/}/"
             fi
         else
-            log_info "Would move: $file → $dest/"
+            log_info "Would move: $file → ${model_directory#"$MANYFOLD_LIBRARY_DIR"/}/"
         fi
     else
-        if [[ -e "$TARGET_DIR/$dest/$file" ]]; then
-            if [[ "$filepath" -nt "$TARGET_DIR/$dest/$file" ]]; then
-                if quarantine_file "$TARGET_DIR/$dest/$file" && mv -f "$filepath" "$TARGET_DIR/$dest/" 2>/dev/null; then
-                    log_info "Overwriting with newer file: $file → $dest/"
+        if ! mkdir -p "$model_directory"; then
+            log_warn "Failed to create Manyfold model directory for $file"
+        elif [[ -e "$model_directory/$file" ]]; then
+            if [[ "$filepath" -nt "$model_directory/$file" ]]; then
+                if quarantine_file "$model_directory/$file" && mv -f "$filepath" "$model_directory/" 2>/dev/null; then
+                    log_info "Overwriting with newer file: $file → ${model_directory#"$MANYFOLD_LIBRARY_DIR"/}/"
                     ((category_counts["$dest"]+=1))
                     ((total_overwritten+=1))
                 else
-                    log_warn "Failed to overwrite $file in $dest/"
+                    log_warn "Failed to overwrite $file in Manyfold library"
                 fi
             else
                 if ! quarantine_file "$filepath"; then
                     ((total_skipped+=1))
                 fi
             fi
-        elif mv -n "$filepath" "$TARGET_DIR/$dest/" 2>/dev/null; then
-            log_info "Moving: $file → $dest/"
+        elif mv -n "$filepath" "$model_directory/" 2>/dev/null; then
+            log_info "Moving: $file → ${model_directory#"$MANYFOLD_LIBRARY_DIR"/}/"
             ((category_counts["$dest"]+=1))
         else
-            log_warn "Failed to move $file to $dest/"
+            log_warn "Failed to move $file to Manyfold library"
         fi
     fi
     matched_files["$filepath"]=1
@@ -269,7 +332,7 @@ move_file_to_category() {
 # --- REFINED D&D CLASSIFICATION & UTILITY MAPPINGS ---
 
 # (0) Utility - Expanded keyword variations for size markers
-register_category "../Utility/Size Markers" "huge creature marker" "gargantuan creature marker" "size marker" "creature marker" "floating" "flying marker"
+register_category "Utility/Size_Markers" "huge creature marker" "gargantuan creature marker" "size marker" "creature marker" "floating" "flying marker"
 
 # DOCUMENTATION & REFERENCE FILES
 register_category "Reference_Docs" ".pdf" ".txt" ".jfif" ".jpg" ".jpeg" ".png"
@@ -383,46 +446,11 @@ while IFS= read -r -d '' filepath; do
         found_match=true
     fi
     
-    # If no category matched, move to Unsorted
+    # If no category matched, import it under an Unsorted Manyfold tag.
     if ! $found_match; then
-        if [ "$DRY_RUN" = true ]; then
-            if [[ -e "$TARGET_DIR/Unsorted/$file" ]]; then
-                if [[ "$filepath" -nt "$TARGET_DIR/Unsorted/$file" ]]; then
-                    ((total_quarantined+=1))
-                    log_info "Would quarantine existing file and overwrite with newer file: $file → Unsorted/"
-                else
-                    ((total_quarantined+=1))
-                    log_info "Would quarantine older or unchanged file: $file from Unsorted/"
-                fi
-            else
-                log_info "Would move: $file → Unsorted/"
-            fi
-            ((category_counts["Unsorted"]+=1))
-        else
-            if [[ -e "$TARGET_DIR/Unsorted/$file" ]]; then
-                if [[ "$filepath" -nt "$TARGET_DIR/Unsorted/$file" ]]; then
-                    if quarantine_file "$TARGET_DIR/Unsorted/$file" && mv -f "$filepath" "$TARGET_DIR/Unsorted/" 2>/dev/null; then
-                        log_info "Overwriting with newer file: $file → Unsorted/"
-                        ((total_unsorted+=1))
-                        ((total_overwritten+=1))
-                    else
-                        log_warn "Failed to overwrite $file in Unsorted/"
-                    fi
-                else
-                    if ! quarantine_file "$filepath"; then
-                        ((total_skipped+=1))
-                    fi
-                fi
-            elif mv -n "$filepath" "$TARGET_DIR/Unsorted/" 2>/dev/null; then
-                log_info "Moving: $file → Unsorted/"
-                ((total_unsorted+=1))
-            else
-                log_warn "Failed to move $file to Unsorted/"
-            fi
-        fi
-        matched_files["$filepath"]=1
+        move_file_to_category "$filepath" "Unsorted"
     fi
-done < <(find "$SOURCE_DIR" \( -path "$TARGET_DIR" -o -path "$QUARANTINE_DIR" \) -prune -o -type f \( -iname "*.stl" -o -iname "*.obj" -o -iname "*.ctb" -o -iname "*.lys" -o -iname "*.zip" -o -iname "*.pdf" -o -iname "*.txt" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.jfif" -o -iname "*.png" \) -print0)
+done < <(find "$SOURCE_DIR" \( -path "$MANYFOLD_LIBRARY_DIR" -o -path "$QUARANTINE_DIR" \) -prune -o -type f \( -iname "*.stl" -o -iname "*.obj" -o -iname "*.ctb" -o -iname "*.lys" -o -iname "*.zip" -o -iname "*.pdf" -o -iname "*.txt" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.jfif" -o -iname "*.png" \) -print0)
 
 # --- PRINT SUMMARY ---
 log_info "======================================================================"
@@ -441,14 +469,14 @@ else
     
     log_info "Sorting complete!"
     log_info "Total files sorted into categories: $total_moved"
-    log_info "Total files in Unsorted: $total_unsorted"
+    log_info "Total files tagged Unsorted: ${category_counts["Unsorted"]:-0}"
     log_info "Total duplicate files skipped: $total_skipped"
     log_info "Total newer files overwriting duplicates: $total_overwritten"
     log_info "Total duplicate files quarantined: $total_quarantined"
-    log_info "Grand Total: $((total_moved + total_unsorted + total_skipped + total_quarantined)) files"
+    log_info "Grand Total: $((total_moved + total_skipped + total_quarantined)) files"
     log_info "Category Breakdown:"
     for category in "${!category_counts[@]}"; do
         printf '%s INFO  %-35s %4d files\n' "$( _iso_timestamp )" "$category" "${category_counts[$category]}"
     done | sort
-    log_info "Results saved to: $TARGET_DIR"
+    log_info "Results saved to: $MANYFOLD_LIBRARY_DIR"
 fi
